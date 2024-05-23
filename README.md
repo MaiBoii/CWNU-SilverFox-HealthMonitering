@@ -3,7 +3,7 @@
 ![ko](https://img.shields.io/badge/lang-ko-red.svg)
 ![py](https://img.shields.io/badge/lang-py-blue.svg)
 <p align="center">
-    <img width="700" alt="ardu_rasp" src="https://github.com/MaiBoii/CWNU-Silverfox-HealthMonitering/assets/102716410/84ab6f4c-50c2-443f-aade-6bb0078a4857">
+    <img width="700" alt="ardu_rasp" src="https://github.com/MaiBoii/CWNU-Silverfox-HealthMonitering/assets/102716410/8d7ba7b6-8f6e-40cc-89a8-b67463618e9d">
 </p>
 
 ### FEATURES OF THIS PROJECT
