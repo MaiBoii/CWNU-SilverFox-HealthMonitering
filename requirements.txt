@@ -1,0 +1,7 @@
+Faker==0.9.3
+firebase_admin==6.5.0
+Flask==2.2.2
+Flask-SQLAlchemy==3.0.3
+python-dotenv==0.21.0
+SQLAlchemy==1.4.46
+schedule==1.2.1
