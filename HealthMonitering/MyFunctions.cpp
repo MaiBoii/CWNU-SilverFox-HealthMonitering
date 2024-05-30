@@ -11,6 +11,8 @@
 #include "heartRate.h"
 #include "HX711.h"
 #include "spo2_algorithm.h"
+#include <RTClib.h>
+
 
 // GPS 수신기 객체 및 시리얼 통신 객체 생성
 TinyGPS gps;
@@ -51,13 +53,14 @@ void GpsReceiver() {
 
 // 사람과의 거리 측정 함수
 bool measureDistanceFromHuman() {
-  //초음파 핀 설정
-  pinMode(ECHO_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
 
   // 사람과의 거리 측정 관련 변수 초기화
   long duration;
   float cm;
+
+    // 트리거 핀을 LOW로 설정
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
 
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
@@ -68,9 +71,13 @@ bool measureDistanceFromHuman() {
 
   //만일 사람이 30cm 이상 기기로부터 멀어졌을 경우
   if ( cm > 30 ){
+    Serial.println("30cm 이상 거리에 있음");
+    Serial.println(cm);
     return true;
   }
   else {
+    Serial.println("30cm 보단 가까이 있음");
+    Serial.println(cm);
     return false;
   }
 }
@@ -111,9 +118,11 @@ bool measureGradient(InitialValues initialValues) {
 
   // 모듈이 60도 이상 기울어졌을 경우
   if ((deltaX > 60) || (deltaY > 60) || (deltaZ > 60)){
+    Serial.println("기울어짐");
     return true;
   }
   else{
+    Serial.println("기울기 멀쩡함");
     return false;
   }
 }
@@ -128,20 +137,26 @@ void checkEmergencySituation() {
     bool gradientDetected = measureGradient(initialValues);
 
     // 둘 다 true를 반환하면 위급 상황으로 판단
-    if (distanceFromHuman || gradientDetected) {
+    if (distanceFromHuman && gradientDetected) {
       // 위급 상황으로 간주하고 true 반환
       Serial.println("Emergency situation detected!");
-      musicStart();
+      //musicStart();
     }
     else {
       // 위급 상황이 아니라면 false 반환
-      Serial.println("No emergency situation detected.");
+      //Serial.println("No emergency situation detected.");
     }
 }
 
+int hall_value; // 홀센서로 감지한 값(LOW : 자석이 감지됨, HIGH : 자석이 감지되지 않음)
+float radius = 0.091; // 바퀴 반지름 : 9.1cm
+extern volatile float distance=0; // 환자의 이동거리
+extern volatile bool isMagnet = false; // 자석 감지 상태를 유지하기 위한 변수
+
 // 이동거리 측정
 void measureDistance() {
-  hall_value = analogRead(HALL_PIN);
+  hall_value = digitalRead(HALL_PIN);
+  
   if (isMagnet == true) {
     if (hall_value == HIGH) {
       distance += PI * 2 * radius;
@@ -156,6 +171,24 @@ void measureDistance() {
     }
   }
 }
+
+// // 인터럽트 서비스 루틴 (ISR)
+// void hallSensorISR() {
+//   int hall_value = digitalRead(HALL_PIN);
+//   if (isMagnet == true && hall_value == HIGH) {
+//     distance += PI * 2 * radius;
+//     isMagnet = false;
+//   } else if (hall_value == LOW) {
+//     isMagnet = true;
+//   }
+// }
+
+// void printDistance() {
+//   // 측정된 거리를 출력
+//   Serial.print("{'Distance': ");
+//   Serial.print(distance);
+//   Serial.println("}");
+// }
 
 // 맥박/산소포화도센서 설정
 #define MAX_BRIGHTNESS 255
@@ -198,8 +231,7 @@ void initializeHeartrate(){
   int adcRange = 4096; //Options: 2048, 4096, 8192, 16384
 
   particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange);
-}
-void measureHeartrate_Spo2() {
+
   bufferLength = 100;
 
   for (byte i = 0; i < bufferLength; i++) {
@@ -212,14 +244,14 @@ void measureHeartrate_Spo2() {
   }
 
   maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
+}
 
-  while (1) {
-    for (byte i = 25; i < 100; i++) {
+void measureHeartrate_Spo2() {
+  for (byte i = 25; i < 100; i++) {
       redBuffer[i - 25] = redBuffer[i];
       irBuffer[i - 25] = irBuffer[i];
     }
 
-    // Read new data into the buffer
     for (byte i = 75; i < 100; i++) {
       while (particleSensor.available() == false)
         particleSensor.check();
@@ -237,7 +269,6 @@ void measureHeartrate_Spo2() {
     Serial.print(heartRate);
     Serial.println(F("'}"));
   }
-}
 
 // 체온 측정 함수
 const long TempdebounceInterval = 10000; // 10초 동안 출력을 하지 않도록 설정
@@ -246,20 +277,18 @@ unsigned long lastTempPrintTime = 0;
 
 void measureTmp() {
 
-  Serial.println("체온 측정중");
   int tmpValue = analogRead(TMP_PIN);
   float tmpVolt = tmpValue * 5.0 / 1024.0;
   float temperature = tmpVolt * 100 - 60;
 
   unsigned long currentMillis = millis();
 
-  if (temperature > 33) {
+  if (temperature > 20) {
     if (!tempExceeded || (currentMillis - lastTempPrintTime >= TempdebounceInterval)) {
       Serial.print("{'Temperature': ");
       Serial.print(temperature);
       Serial.println("}");
       tempExceeded = true;
-      lastTempPrintTime = currentMillis;
     }
   } else {
     tempExceeded = false; // 온도가 33도 이하로 떨어지면 초기화

@@ -12,7 +12,7 @@ const int ECHO_PIN = 2; //ECHO 핀
 const int TRIG_PIN = 3; //TRIG 핀 
 
 const int BUZZER_PIN = 9; // 스피커 모듈 핀
-const int GPS_RXPin = 11;  //GPS RX 핀 
+const int GPS_RXPin = 11;  //GPS RX 핀 `
 const int GPS_TXPin = 12;  //GPS TX 핀 
 
 const int TMP_PIN = A0; // 체온 측정 핀
@@ -21,13 +21,7 @@ const int xPin = A1; // x기울기 핀
 const int yPin = A2; // y기울기 핀
 const int zPin = A3; // z기울기 핀
 
-const int HALL_PIN = A5; //홀 센서 핀
-
-// 전역 변수 선언
-extern int hall_value; // 홀센서로 감지한 값(LOW : 자석이 감지됨, HIGH : 자석이 감지되지 않음)
-extern float radius; // 바퀴 반지름 : 9.1cm
-extern float distance; // 환자의 이동거리
-extern bool isMagnet; // 자석 감지 상태를 유지하기 위한 변수
+const int HALL_PIN = 5; //홀 센서 핀
 
 //테스트용 반짝반짝 작은별
 #define NOTE_C4  262
@@ -38,5 +32,8 @@ extern bool isMagnet; // 자석 감지 상태를 유지하기 위한 변수
 #define NOTE_A4  440
 #define NOTE_B4  494
 #define NOTE_C5  523
+
+
+
 
 #endif // MY_VARIABLES_H
