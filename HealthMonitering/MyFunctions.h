@@ -15,13 +15,10 @@ bool measureDistanceFromHuman(); //사람과의 거리 측정 함수
 void measureDistance(); //이동거리 측정 함수
 void GpsReceiver(); //GPS 정보 수신 함수
 
-void measureWeight(); //체중 측정 함수
 void checkEmergencySituation(); //응급 상황 판단 함수
 
 void initializeHeartrate(); //심박수 초기화 함수
 void measureHeartrate_Spo2(); //심박수 및 산소포화도 측정 함수
-
-void measureDistance();
 
 void measureTmp(); //체온 측정 함수
 #endif

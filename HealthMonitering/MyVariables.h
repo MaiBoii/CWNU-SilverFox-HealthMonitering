@@ -23,9 +23,6 @@ const int zPin = A3; // z기울기 핀
 
 const int HALL_PIN = A5; //홀 센서 핀
 
-// const int DOUT = A6; // HX711 SCK 핀
-// const int SCK = A7; // HX711 DT 핀
-
 // 전역 변수 선언
 extern int hall_value; // 홀센서로 감지한 값(LOW : 자석이 감지됨, HIGH : 자석이 감지되지 않음)
 extern float radius; // 바퀴 반지름 : 9.1cm

@@ -6,7 +6,6 @@ SoftwareSerial ss(GPS_RXPin, GPS_TXPin);
 
 Task tasks[] = {
   {0, 1000, measureTmp},
-  // {0, 1000, measureWeight},
   {0, 30000, GpsReceiver},
   {0, 3000, checkEmergencySituation},
   {0,1000, measureHeartrate_Spo2},
@@ -24,12 +23,7 @@ void setup() {
 
   // GPS 수신기 핀 설정
   ss.begin(115200);
-
-  // // HX711 무게 센서 핀 설정
-  // scale.begin(DOUT, SCK);
-  // scale.set_scale(6000);  // 기본 측정 단위로 보정합니다.
-  // scale.tare();
-
+  
   //심박수 
   initializeHeartrate();
 }

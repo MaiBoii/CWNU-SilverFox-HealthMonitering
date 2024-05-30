@@ -139,12 +139,6 @@ void checkEmergencySituation() {
     }
 }
 
-
-int hall_value; // 홀센서로 감지한 값(LOW : 자석이 감지됨, HIGH : 자석이 감지되지 않음)
-float radius = 0.091; // 바퀴 반지름 : 9.1cm
-float distance=0; // 환자의 이동거리
-bool isMagnet = false; // 자석 감지 상태를 유지하기 위한 변수
-
 // 이동거리 측정
 void measureDistance() {
   hall_value = analogRead(HALL_PIN);
@@ -242,32 +236,6 @@ void measureHeartrate_Spo2() {
     Serial.print(F("'}, {'Heartrate': '"));
     Serial.print(heartRate);
     Serial.println(F("'}"));
-  }
-}
-
-
-// 체중 측정 관련 변수
-const long WeightdebounceInterval = 5000; // 5초 동안 출력을 하지 않도록 설정
-bool weightExceeded = false;
-unsigned long lastWeightPrintTime = 0;
-
-// 로드셀 모듈로 체중값 읽어오기 
-void measureWeight() {
-
-  unsigned long currentMillis = millis();
-
-  float weight = scale.get_units(50); // 10번의 샘플링 후 평균값을 사용합니다.
-
-  if (weight > 30) { //측정된 무게가 30kg 이상이면
-    if (!weightExceeded || (currentMillis - lastWeightPrintTime >= WeightdebounceInterval)) {
-        Serial.print("{'Weight': ");
-        Serial.print(weight, 2); // 소수점 두 자리까지 출력합니다.
-        Serial.println("}");
-        weightExceeded = true;
-        lastWeightPrintTime = currentMillis;
-    }
-  } else {
-    weightExceeded = false; // 무게가 30kg 이하로 떨어지면 초기화
   }
 }
 
