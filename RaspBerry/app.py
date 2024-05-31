@@ -19,11 +19,11 @@ import os
 import json
 from dotenv import load_dotenv
 from sqlalchemy import extract, func,desc
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,time
 from sqlalchemy.exc import IntegrityError
 import threading
 import schedule
-import time
+import pytz
 
 import firebase_admin
 from firebase_admin import credentials
@@ -177,7 +177,11 @@ def serial_thread():
     print("시리얼 모니터 수신이 시작되었습니다.")
     while True:
             # 시리얼 데이터 읽기
-            serial_data = ser.readline().decode('utf-8').strip()
+            try:
+                serial_data = ser.readline().decode('utf-8').strip()
+            except UnicodeDecodeError:
+                print("UnicodeDecodeError: Invalid UTF-8 byte detected. Skipping...")
+                continue
             
             # 데이터 확인 및 처리
             if serial_data.startswith("{") and serial_data.endswith("}"):
@@ -421,19 +425,25 @@ def year(field):
 
 # ---------------------------------------------------------------------------------------------
 
+korea_timezone = pytz.timezone('Asia/Seoul')
+# current_time = datetime.combine(datetime.today(), time(15, 52, 0))
+current_time = "16:12"
+
 if __name__ == '__main__':
       
-      # 시리얼 통신 스레드 시작
-      serial_thread = threading.Thread(target=serial_thread)
-      serial_thread.daemon = True
-      serial_thread.start()
+    # 시리얼 통신 스레드 시작
+    serial_thread = threading.Thread(target=serial_thread)
+    serial_thread.daemon = True
+    serial_thread.start()
 
-      # 스케줄러 작업 등록: 매일 자정 1분 전에 save_workout_data 함수 호출
-      schedule.every().day.at("23:59:00").do(save_workout_data)
+    # 현재 시간대로 스케줄러 작업 등록
+    schedule.every().day.at("16:17", "Asia/Seoul").do(print_serial_data)
+    #next_time = current_time + timedelta(minutes=1)
+    schedule.every().day.at("16:18", "Asia/Seoul").do(save_workout_data)
 
-      app.run('0.0.0.0', port=5000, debug=False, threaded =True)
+    app.run('0.0.0.0', port=5000, debug=False, threaded=True)
 
-      # 계속해서 스케줄러된 작업을 실행
-      while True:
-         schedule.run_pending()
-         time.sleep(1)  # 1분마다 스케줄링된 작업을 확인합니다.
+    # 계속해서 스케줄러된 작업을 실행
+    while True:
+        schedule.run_pending()
+        time.sleep(1)  # 1분마다 스케줄링된 작업을 확인합니다.
