@@ -8,7 +8,7 @@ SoftwareSerial ss(GPS_RXPin, GPS_TXPin);
 // RTC_DS3231 rtc;
 
 // 생체 정보 측정 주기 (단위: 밀리초)
-const unsigned long measureInterval = 60000; // 1분
+const unsigned long measureInterval = 10000; // 1분
 unsigned long lastMeasureTime = 0;
 
 // 생체 정보 측정 횟수 저장 변수
@@ -48,8 +48,8 @@ void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 
-  //심박수 
-  initializeHeartrate();
+  // //심박수 
+  // initializeHeartrate();
 
 
   pinMode(HALL_PIN, INPUT);
@@ -66,23 +66,23 @@ void loop() {
   //   distance = 0.0;  // 하루가 바뀔 때 이동 거리 초기화
   // }
 
-    // 주기적으로 생체 정보 측정
-  unsigned long currentTime = millis();
-  if (currentTime - lastMeasureTime >= measureInterval) {
-    lastMeasureTime = currentTime;
+  //   // 주기적으로 생체 정보 측정
+  // unsigned long currentTime = millis();
+  // if (currentTime - lastMeasureTime >= measureInterval) {
+  //   lastMeasureTime = currentTime;
     
-    if (measureCount < 5) {
-      measureHeartrate_Spo2();
-      measureTmp();
-      //measureGradient(initialValues);
-      //measureDistanceFromHuman();
-      measureCount++;
-      Serial.print("Measurements taken today: ");
-      Serial.println(measureCount);
-    } else {
-      Serial.println("Maximum number of measurements taken for today.");
-    }
-  }
+  //   if (measureCount < 15) {
+  //     measureHeartrate_Spo2();
+  //     measureTmp();
+  //     //measureGradient(initialValues);
+  //     //measureDistanceFromHuman();
+  //     measureCount++;
+  //     Serial.print("Measurements taken today: ");
+  //     Serial.println(measureCount);
+  //   } else {
+  //     //Serial.println("Maximum number of measurements taken for today.");
+  //   }
+  // }
 
   // 이동 거리 측정 함수 호출
   checkEmergencySituation();

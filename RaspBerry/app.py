@@ -3,7 +3,6 @@
 1. 시리얼 통신으로 받은 TodayWeight, workout_time, distance,Heartbeat,Oxygen,Temperature 데이터를 데이터베이스에 저장
 2. 시리얼 통신으로 받은 위치정보 실시간으로 (3분 간격) 전역변수 LOCATION에 저장
 3. 긴급 상황시 보호자 스마트폰으로 가장 최근의 위치정보 송신
-4. 시리얼 통신으로 받은 데이터가 'Weight'일 경우, 오늘치 데이터가 없으면 데이터 입력, 있으면 평균내서 데이터 수정
 5. 시리얼 통신으로 받은 데이터가 'Distance'일 경우, 오늘치 데이터가 없으면 데이터 입력, 있으면 더해서 데이터 수정
 6. 시리얼 통신으로 받은 데이터가 'Emergency'일 경우, 긴급 상황이라는 메시지를 보호자 스마트폰으로 전송
 7. 시리얼 통신으로 받은 데이터가 'Location'일 경우, 위치 정보를 갱신 
@@ -12,7 +11,7 @@
 10. 시리얼 통신으로 받은 데이터가 'Temperature'일 경우, 오늘치 데이터가 없으면 데이터 입력, 있으면 평균내서 데이터 수정
 """
 
-from flask import Flask, render_template,request,jsonify
+from flask import Flask, render_template,request,jsonify,current_app
 from models import db,Profile,Workout,Year,month_avg,avg,Token
 #from utils import create_dummy_data
 import serial
@@ -61,13 +60,17 @@ SERIAL_DATA = {
     "Distance": 0,
     "WorkoutTime": {"hours": 0, "minutes": 0},
     "Temperature": 0,
-    "Heartbeat": 0,
+    "Heartrate": 0,
     "Weight": 0
 }
 
 LOCATION = {
-      "latitude": 0,
-      "longitude": 0
+      "latitude": 35.247256,
+      "longitude": 128.694467
+}
+
+EMERGENCY = {
+    "Emergency": ''
 }
 
 
@@ -94,10 +97,11 @@ def save_user_profile():
         db.session.add(new_token)
         db.session.commit()
         print("새로운 FCM 토큰이 저장되었습니다.")
-        return 200
+        return jsonify({"message": "새로운 FCM 토큰이 저장되었습니다."}), 200
     else:
         # 있으면 그냥 pass
-        return 200
+        print("토큰이 이미 존재합니다")
+        return jsonify({"message": "토큰이 이미 존재합니다."}), 200
 
 # 요청시 위도경도 전송하기
 @app.route('/location', methods=['GET'])
@@ -110,18 +114,22 @@ def send_location():
 
 # 안전사고시 fcm 메시지 전송
 def send_fcm_notification(token):
-    message = messaging.Message(
-        notification=messaging.Notification(
-            title="안전사고 발생!",
-            body= "안전사고가 발생했습니다. 위치를 확인해주세요."
-        ),
-        data={
-            # 위도 경도 넣기
-         'latitude': LOCATION['latitude'],
-         'longitude': LOCATION['longitude']
-        }
-    )
-    response = messaging.send(message)
+        latest_token = get_latest_token()
+        if latest_token:
+            message = messaging.Message(
+                token=token,
+                notification=messaging.Notification(
+                    title="안전사고 발생!",
+                    body="안전사고가 발생했습니다. 위치를 확인해주세요."
+                ),
+                data={
+                    'latitude': str(LOCATION['latitude']),
+                    'longitude': str(LOCATION['longitude'])
+                }
+            )
+            response = messaging.send(message)
+        else:
+            print('No token found')
 
 # ---------------------------------------------------------------------------------------------
 
@@ -133,7 +141,7 @@ def print_serial_data():
     print("Distance:", SERIAL_DATA["Distance"])
     print("WorkoutTime:", SERIAL_DATA["WorkoutTime"])
     print("Temperature:", SERIAL_DATA["Temperature"])
-    print("Heartbeat:", SERIAL_DATA["Heartbeat"])
+    print("Heartrate:", SERIAL_DATA["Heartrate"])
     print("Weight:", SERIAL_DATA["Weight"])
     print()
 
@@ -153,7 +161,7 @@ def save_workout_data():
         today_weight=SERIAL_DATA["Weight"],
         oxygen=SERIAL_DATA["Oxygen"],
         temp=SERIAL_DATA["Temperature"],
-        heart=SERIAL_DATA["Heartbeat"]
+        heart=SERIAL_DATA["Heartrate"]
     )
     db.session.add(new_workout)
 
@@ -166,34 +174,49 @@ def save_workout_data():
 
 # 시리얼 통신 함수
 def serial_thread():
-   while True:
-        # 시리얼 데이터 읽기
-        serial_data = ser.readline().decode('utf-8').strip()
-        
-        # 데이터 확인 및 처리
-        if serial_data.startswith("{") and serial_data.endswith("}"):
-            # 시리얼 데이터가 JSON 형식인 경우에만 처리
-            try:
-                # JSON 형식의 데이터를 딕셔너리로 변환
-                data_dict = json.loads(serial_data)
-                
-                # 각 항목을 해당 변수에 업데이트
-                for key, value in data_dict.items():
-                    if key in SERIAL_DATA:
-                        SERIAL_DATA[key] = value
-                    elif key in LOCATION:
-                        LOCATION[key] = value
-                    else:
-                        print("Unknown key:", key)
+    print("시리얼 모니터 수신이 시작되었습니다.")
+    while True:
+            # 시리얼 데이터 읽기
+            serial_data = ser.readline().decode('utf-8').strip()
+            
+            # 데이터 확인 및 처리
+            if serial_data.startswith("{") and serial_data.endswith("}"):
+                # 시리얼 데이터가 JSON 형식인 경우에만 처리
+                try:
+                    # JSON 형식의 데이터를 딕셔너리로 변환
+                    data_dict = json.loads(serial_data)
 
-                # SERIAL_DATA와 LOCATION의 내부 데이터가 전부 갱신될 때 출력
-                if all(SERIAL_DATA.values()) or all(LOCATION.values()):
-                    print_serial_data()
-                    print_location_data()
+                    updated = False
+                    # 각 항목을 해당 변수에 업데이트
+                    for key, value in data_dict.items():
+                        if key in SERIAL_DATA:
+                            if SERIAL_DATA[key] != value:
+                                SERIAL_DATA[key] = value
+                                updated = True
+                                print(f"Updated SERIAL_DATA: {key} = {value}")
+                        elif key in LOCATION:
+                            if LOCATION[key] != value:
+                                LOCATION[key] = value
+                                updated = True
+                                print(f"Updated LOCATION: {key} = {value}")
 
-            except ValueError:
-                print("Invalid JSON format:", serial_data)
-                continue
+                        elif key in EMERGENCY:
+                            if EMERGENCY[key] != value:
+                                EMERGENCY[key] = value
+                                updated = True
+                                print(f"Updated EMERGENCY: {key} = {value}")
+                                send_fcm_notification('dhTtALMRT7CX-VJayxTvjK:APA91bErq83eQ09MpxWI0W598oBoWPz2S-WNq5IUQwxRTLwhPpr-RL-DHOlgjkmn5CzmIAo1Yh6_fKwc987xTaKFCnbf8naesLX2qV4SvpHhnVgWQe7VlNXZiuCC2VoF1-qZ6LgG-Rt9')
+                        else:
+                            print("Unknown key:", key)
+
+                    # 만약 SERIAL_DATA와 LOCATION 중 하나라도 갱신되었다면 출력
+                    #if updated:
+                        #print_serial_data()
+                        #print_location_data()
+
+                except ValueError:
+                    print("Invalid JSON format:", serial_data)
+                    continue
 
 # ---------------------------------------------------------------------------------------------
 
@@ -207,21 +230,23 @@ def index():
 
 #가장 최근 토큰 가져오기
 def get_latest_token():
-    latest_token = Token.query.order_by(Token.id.desc()).first()
-    if latest_token:
-        return latest_token.token
-    else:
-        return None
+    with app.app_context():
+        latest_token = Token.query.order_by(Token.id.desc()).first()
+        if latest_token:
+            return latest_token.token
+        else:
+            return None
 
 #긴급상황 발생시 fcm 메시지 전송
 @app.route('/emergency', methods=['GET'])
 def emergency():
-    latest_token = get_latest_token()
-    if latest_token:
-        send_fcm_notification(latest_token)
-        return '', 200
-    else:
-        return 'No token found', 404
+        latest_token = get_latest_token()
+        if latest_token:
+            print(latest_token)
+            send_fcm_notification(latest_token)
+            return '', 200
+        else:
+            return 'No token found', 404
 
 #개인정보 GET 전송
 @app.route('/profile', methods=['POST'])

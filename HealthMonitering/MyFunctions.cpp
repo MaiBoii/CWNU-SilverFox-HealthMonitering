@@ -77,7 +77,7 @@ bool measureDistanceFromHuman() {
   }
   else {
     Serial.println("30cm 보단 가까이 있음");
-    Serial.println(cm);
+   Serial.println(cm);
     return false;
   }
 }
@@ -117,11 +117,14 @@ bool measureGradient(InitialValues initialValues) {
   int deltaZ = zRead - initialValues.initialZ;
 
   // 모듈이 60도 이상 기울어졌을 경우
-  if ((deltaX > 60) || (deltaY > 60) || (deltaZ > 60)){
-    Serial.println("기울어짐");
+  if ((abs(deltaX) > 30) || (abs(deltaY) > 30) || (abs(deltaZ) > 30)){
+    //Serial.println("기울어짐");
     return true;
   }
   else{
+    Serial.println(deltaX);
+    Serial.println(deltaY);
+    Serial.println(deltaZ);
     Serial.println("기울기 멀쩡함");
     return false;
   }
@@ -138,32 +141,33 @@ void checkEmergencySituation() {
 
     // 둘 다 true를 반환하면 위급 상황으로 판단
     if (distanceFromHuman && gradientDetected) {
-      // 위급 상황으로 간주하고 true 반환
-      Serial.println("Emergency situation detected!");
-      //musicStart();
+
+      Serial.println("{\"Emergency\": \"True\"}");
+      musicStart();
     }
     else {
-      // 위급 상황이 아니라면 false 반환
       //Serial.println("No emergency situation detected.");
     }
 }
 
 int hall_value; // 홀센서로 감지한 값(LOW : 자석이 감지됨, HIGH : 자석이 감지되지 않음)
-float radius = 0.091; // 바퀴 반지름 : 9.1cm
+float radius = 0.085; // 바퀴 반지름 : 8.5cm
 extern volatile float distance=0; // 환자의 이동거리
 extern volatile bool isMagnet = false; // 자석 감지 상태를 유지하기 위한 변수
 
 // 이동거리 측정
 void measureDistance() {
   hall_value = digitalRead(HALL_PIN);
+
+  Serial.println(hall_value);
   
   if (isMagnet == true) {
     if (hall_value == HIGH) {
       distance += PI * 2 * radius;
       isMagnet = false;
-      Serial.print("{'Distance': ");
+      Serial.print("{\"Distance\": \"");
       Serial.print(distance);
-      Serial.println("}");
+      Serial.println("\"}");
     }
   } else {
     if (hall_value == LOW) {
@@ -263,15 +267,16 @@ void measureHeartrate_Spo2() {
 
     maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
 
-    Serial.print(F("{'Oxygen': '"));
+    Serial.print("{\"Oxygen\": \"");
     Serial.print(spo2);
-    Serial.print(F("'}, {'Heartrate': '"));
+    Serial.println("\"}");
+    Serial.print("{\"Heartrate\": \"");
     Serial.print(heartRate);
-    Serial.println(F("'}"));
+    Serial.println("\"}");
   }
 
 // 체온 측정 함수
-const long TempdebounceInterval = 10000; // 10초 동안 출력을 하지 않도록 설정
+const long TempdebounceInterval = 0; // 10초 동안 출력을 하지 않도록 설정
 bool tempExceeded = false;
 unsigned long lastTempPrintTime = 0;
 
@@ -285,9 +290,9 @@ void measureTmp() {
 
   if (temperature > 20) {
     if (!tempExceeded || (currentMillis - lastTempPrintTime >= TempdebounceInterval)) {
-      Serial.print("{'Temperature': ");
+      Serial.print("{\"Temperature\": \"");
       Serial.print(temperature);
-      Serial.println("}");
+      Serial.println("\"}");
       tempExceeded = true;
     }
   } else {
@@ -297,7 +302,7 @@ void measureTmp() {
 
 // 스피커 재생 함수
 void musicStart() {
-  
+  Serial.println("음악이 재생됩니다!");
   pinMode(BUZZER_PIN, OUTPUT); // 스피커 핀 설정
 
   int melody[] = {
@@ -322,6 +327,4 @@ void musicStart() {
     delay(pauseBetweenNotes);
     noTone(BUZZER_PIN);
   }
-
-  delay(2000); // 다음 반복을 위한 딜레이
 }
