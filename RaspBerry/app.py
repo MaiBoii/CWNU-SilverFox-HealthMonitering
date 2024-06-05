@@ -11,7 +11,7 @@
 10. 시리얼 통신으로 받은 데이터가 'Temperature'일 경우, 오늘치 데이터가 없으면 데이터 입력, 있으면 평균내서 데이터 수정
 """
 
-from flask import Flask, render_template,request,jsonify,current_app
+from flask import Flask, render_template,request,jsonify
 from models import db,Profile,Workout,Year,month_avg,avg,Token
 #from utils import create_dummy_data
 import serial
@@ -425,9 +425,16 @@ def year(field):
 
 # ---------------------------------------------------------------------------------------------
 
-korea_timezone = pytz.timezone('Asia/Seoul')
-# current_time = datetime.combine(datetime.today(), time(15, 52, 0))
-current_time = "16:12"
+# 일정 작업 실행 함수
+def schedule_tasks():
+
+    # 스케줄 작업 설정 (매일 특정 시간에 작업 실행)
+    schedule.every().day.at("16:21:00").do(print_serial_data)
+    schedule.every().day.at("16:21:20").do(save_workout_data)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
 if __name__ == '__main__':
       
@@ -436,14 +443,8 @@ if __name__ == '__main__':
     serial_thread.daemon = True
     serial_thread.start()
 
-    # 현재 시간대로 스케줄러 작업 등록
-    schedule.every().day.at("16:17", "Asia/Seoul").do(print_serial_data)
-    #next_time = current_time + timedelta(minutes=1)
-    schedule.every().day.at("16:18", "Asia/Seoul").do(save_workout_data)
+    scheduler_thread = threading.Thread(target=schedule_tasks)
+    scheduler_thread.daemon = True
+    scheduler_thread.start()
 
     app.run('0.0.0.0', port=5000, debug=False, threaded=True)
-
-    # 계속해서 스케줄러된 작업을 실행
-    while True:
-        schedule.run_pending()
-        time.sleep(1)  # 1분마다 스케줄링된 작업을 확인합니다.
