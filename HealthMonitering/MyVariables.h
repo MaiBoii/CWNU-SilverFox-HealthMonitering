@@ -33,7 +33,4 @@ const int HALL_PIN = 5; //홀 센서 핀
 #define NOTE_B4  494
 #define NOTE_C5  523
 
-
-
-
 #endif // MY_VARIABLES_H

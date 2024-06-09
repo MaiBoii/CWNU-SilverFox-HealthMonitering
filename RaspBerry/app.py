@@ -13,17 +13,17 @@
 
 from flask import Flask, render_template,request,jsonify
 from models import db,Profile,Workout,Year,month_avg,avg,Token
-#from utils import create_dummy_data
+from utils import create_dummy_years
 import serial
 import os
 import json
 from dotenv import load_dotenv
 from sqlalchemy import extract, func,desc
-from datetime import datetime, timedelta,time
+from datetime import datetime, timedelta, time as dt_time
 from sqlalchemy.exc import IntegrityError
 import threading
 import schedule
-import pytz
+import time
 
 import firebase_admin
 from firebase_admin import credentials
@@ -40,6 +40,9 @@ db_host = os.getenv("DB_URI")
 ser_port = os.getenv("SER_PORT")
 ser_baud = os.getenv("SER_BAUD")
 
+# FCM 토큰 설정 
+fcm_token = os.getenv("FCM_TOKEN")
+
 # 시리얼 통신 객체 생성
 ser = serial.Serial(ser_port, ser_baud)
 
@@ -48,10 +51,13 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = db_host # MySQL 연결 정보 입력
 db.init_app(app)
 
+
+
 # 데이터베이스 생성
 with app.app_context():
     db.create_all()
     #create_dummy_data()
+    create_dummy_years()
 
 # 시리얼 통신으로부터 받은 데이터를 저장할 전역 변수 선언
 
@@ -64,10 +70,16 @@ SERIAL_DATA = {
     "Weight": 0
 }
 
+# 테스트용
 LOCATION = {
-      "latitude": 35.247256,
-      "longitude": 128.694467
+      "latitude": '35.23766867636521',
+      "longitude": '128.69209681302723'
 }
+
+# LOCATION = {
+#       "latitude": '',
+#       "longitude": ''
+# }
 
 EMERGENCY = {
     "Emergency": ''
@@ -153,27 +165,53 @@ def print_location_data():
     print()
 
 # 데이터베이스에 운동 데이터 저장
-def save_workout_data():
-    new_workout = Workout(
-        date=datetime.now().date(),
-        distance=SERIAL_DATA["Distance"],
-        workout_time=datetime.strptime(f"{SERIAL_DATA['WorkoutTime']['hours']}:{SERIAL_DATA['WorkoutTime']['minutes']}", "%H:%M").time(),
-        today_weight=SERIAL_DATA["Weight"],
-        oxygen=SERIAL_DATA["Oxygen"],
-        temp=SERIAL_DATA["Temperature"],
-        heart=SERIAL_DATA["Heartrate"]
-    )
-    db.session.add(new_workout)
 
-    try:
-        db.session.commit()
-        print("Workout 데이터가 성공적으로 저장되었습니다.")
-    except IntegrityError as e:
-        db.session.rollback()
-        print("에러가 발생하였습니다.:", e)
+# 데이터베이스에 운동 데이터 저장
+def save_workout_data():
+    with app.app_context():
+        today = datetime.now().date()
+        existing_workout = Workout.query.filter_by(date=today).first()
+        
+        # 기존 데이터가 있는 경우
+        if existing_workout:
+            existing_workout.distance = round(SERIAL_DATA["Distance"] / 1000, 3)
+            # 생체정보들은 기존 것과 새로운 것의 평균을 계산 (값이 0이 아닌 경우에만)
+            existing_workout.workout_time = dt_time(SERIAL_DATA["WorkoutTime"]["hours"], SERIAL_DATA["WorkoutTime"]["minutes"]),
+            if SERIAL_DATA["Oxygen"] != 0:
+                existing_workout.oxygen = (existing_workout.oxygen + SERIAL_DATA["Oxygen"]) / 2
+            if SERIAL_DATA["Temperature"] != 0:
+                existing_workout.temp = (existing_workout.temp + SERIAL_DATA["Temperature"]) / 2
+            if SERIAL_DATA["Heartrate"] != 0:
+                existing_workout.heart = int((existing_workout.heart + SERIAL_DATA["Heartrate"]) / 2)
+
+        else:
+            # 새로운 데이터 추가
+            new_workout = Workout(
+                date=today,
+                distance=round(SERIAL_DATA["Distance"] / 1000, 3),
+                workout_time=dt_time(SERIAL_DATA["WorkoutTime"]["hours"], SERIAL_DATA["WorkoutTime"]["minutes"]),
+                today_weight=SERIAL_DATA["Weight"],
+                oxygen=SERIAL_DATA["Oxygen"],
+                temp=SERIAL_DATA["Temperature"],
+                heart=SERIAL_DATA["Heartrate"]
+            )
+            db.session.add(new_workout)
+
+        try:
+            db.session.commit()
+            print("Workout 데이터가 성공적으로 저장되었습니다.")
+        except IntegrityError as e:
+            db.session.rollback()
+            print("에러가 발생하였습니다.:", e)
+
+# 홀센서 감지 횟수 저장 변수
+hall_sensor_count = 0
+hall_sensor_threshold = 3  # 감지 횟수 임계값
+distance_increment = 1  # 홀센서 감지 3회당 증가할 거리
 
 # 시리얼 통신 함수
 def serial_thread():
+    global hall_sensor_count, last_distance_update_time
     print("시리얼 모니터 수신이 시작되었습니다.")
     while True:
             # 시리얼 데이터 읽기
@@ -191,13 +229,29 @@ def serial_thread():
                     data_dict = json.loads(serial_data)
 
                     updated = False
-                    # 각 항목을 해당 변수에 업데이트
                     for key, value in data_dict.items():
                         if key in SERIAL_DATA:
-                            if SERIAL_DATA[key] != value:
-                                SERIAL_DATA[key] = value
-                                updated = True
-                                print(f"Updated SERIAL_DATA: {key} = {value}")
+                            if key == "Distance":
+                                hall_sensor_count += 1
+                                if hall_sensor_count >= hall_sensor_threshold:
+                                    value = float(value)  # 문자열을 float으로 변환
+                                    if SERIAL_DATA[key] != value:
+                                        SERIAL_DATA[key] = value
+                                        print(str(SERIAL_DATA[key]) + '로 업데이트')
+                                        last_distance_update_time = datetime.now()
+                                        updated = True
+                                        print(f"Updated SERIAL_DATA: {key} = {value}")
+                                else:
+                                    print(f"Distance 메시지 {hall_sensor_count}번째 감지됨")
+                            else:
+                                if SERIAL_DATA[key] != value:
+                                    if isinstance(value, str):
+                                        value = float(value) if '.' in value else int(value)
+                                    SERIAL_DATA[key] = value
+                                    updated = True
+                                    print(f"Updated SERIAL_DATA: {key} = {value}")
+                                    # 새 데이터가 업데이트되면 데이터베이스에 저장
+                                    save_workout_data()
                         elif key in LOCATION:
                             if LOCATION[key] != value:
                                 LOCATION[key] = value
@@ -208,8 +262,9 @@ def serial_thread():
                             if EMERGENCY[key] != value:
                                 EMERGENCY[key] = value
                                 updated = True
+                                print_location_data()
                                 print(f"Updated EMERGENCY: {key} = {value}")
-                                send_fcm_notification('dhTtALMRT7CX-VJayxTvjK:APA91bErq83eQ09MpxWI0W598oBoWPz2S-WNq5IUQwxRTLwhPpr-RL-DHOlgjkmn5CzmIAo1Yh6_fKwc987xTaKFCnbf8naesLX2qV4SvpHhnVgWQe7VlNXZiuCC2VoF1-qZ6LgG-Rt9')
+                                send_fcm_notification(fcm_token)
                         else:
                             print("Unknown key:", key)
 
@@ -384,7 +439,7 @@ def main_info():
 @app.route('/days/<field>', methods=['GET'])
 def days_data(field):
    week_data = Workout.query.order_by(desc(Workout.date)).first()
-   oneWeek_data = week_data.date - timedelta(days=7)
+   oneWeek_data = week_data.date - timedelta(days=8)
    OneWeek_data = Workout.query.filter(Workout.date > oneWeek_data).all()
    data = {'7days_data':[]}
    for data_days in OneWeek_data:
@@ -425,16 +480,34 @@ def year(field):
 
 # ---------------------------------------------------------------------------------------------
 
-# 일정 작업 실행 함수
-def schedule_tasks():
 
-    # 스케줄 작업 설정 (매일 특정 시간에 작업 실행)
-    schedule.every().day.at("16:21:00").do(print_serial_data)
-    schedule.every().day.at("16:21:20").do(save_workout_data)
+# # 일정 작업 실행 함수
+# def schedule_tasks():
+
+#     # 스케줄 작업 설정 (매일 특정 시간에 작업 실행)
+#     schedule.every().day.at("16:21:00").do(print_serial_data)
+#     schedule.every().day.at("16:21:20").do(save_workout_data)
+
+#     while True:
+#         schedule.run_pending()
+#         time.sleep(1)
+
+# 타이머 초기화
+last_distance_update_time = datetime.now()
+distance_update_interval = timedelta(minutes=1)  # 5분
+
+def check_distance_update():
+    global hall_sensor_count, last_distance_update_time
 
     while True:
-        schedule.run_pending()
-        time.sleep(1)
+        current_time = datetime.now()
+        if current_time - last_distance_update_time > distance_update_interval:
+            # 5분 이상 업데이트가 없으면 데이터베이스에 저장
+            save_workout_data()
+            hall_sensor_count = 0
+            print("Distance 업데이트가 없어 데이터를 저장하고 hall_sensor_count를 초기화합니다.")
+        
+        time.sleep(60)  # 1분마다 체크
 
 if __name__ == '__main__':
       
@@ -443,8 +516,13 @@ if __name__ == '__main__':
     serial_thread.daemon = True
     serial_thread.start()
 
-    scheduler_thread = threading.Thread(target=schedule_tasks)
-    scheduler_thread.daemon = True
-    scheduler_thread.start()
+    # scheduler_thread = threading.Thread(target=schedule_tasks)
+    # scheduler_thread.daemon = True
+    # scheduler_thread.start()
+
+    # Distance 업데이트 체크 스레드 시작
+    distance_check_thread = threading.Thread(target=check_distance_update)
+    distance_check_thread.daemon = True
+    distance_check_thread.start()
 
     app.run('0.0.0.0', port=5000, debug=False, threaded=True)

@@ -1,8 +1,11 @@
+//HealthMonitering.ino
+
 #include "MyVariables.h"
 #include "MyFunctions.h"
 
 InitialValues initialValues;
 SoftwareSerial ss(GPS_RXPin, GPS_TXPin);
+TinyGPS gps;
 
 // // RTC 객체 생성
 // RTC_DS3231 rtc;
@@ -42,17 +45,17 @@ void setup() {
   initialValues = measureInitGradient(); // 기울기 초기값 설정
 
   // GPS 수신기 핀 설정
-  ss.begin(115200);
+  ss.begin(9600);
 
-    //초음파 핀 설정
+  //초음파 핀 설정
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 
-  // //심박수 
-  // initializeHeartrate();
-
-
+  // 홀센서 핀 설정
   pinMode(HALL_PIN, INPUT);
+  
+  // 심박수 
+  initializeHeartrate();
 }
 
 void loop() {
@@ -84,7 +87,12 @@ void loop() {
   //   }
   // }
 
+  // // GPS 정보 수신 함수 호출
+  //GpsReceiver();
   // 이동 거리 측정 함수 호출
-  checkEmergencySituation();
+  measureHeartrate_Spo2();
+  measureTmp();
+
   measureDistance();
+  checkEmergencySituation();
 }
